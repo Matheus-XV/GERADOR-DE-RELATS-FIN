@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle Financeiro</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e1e1e">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #ffffff;
+            --accent: #bb86fc;
+            --green: #03dac6;
+            --red: #cf6679;
+            --danger: #ff4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .tabs {
+            display: flex;
+            background-color: var(--card-bg);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-content {
+            display: none;
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .card h3 { margin: 0 0 10px 0; font-size: 13px; color: #aaa; text-transform: uppercase; }
+        .money { font-size: 20px; font-weight: bold; }
+        .v1 { color: var(--green); }
+        .v2 { color: var(--red); }
+
+        .input-group { display: flex; flex-direction: column; gap: 10px; }
+        .input-label { font-size: 11px; color: #888; text-align: left; margin-bottom: -4px; }
+        input, select {
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background-color: #2c2c2c;
+            color: white;
+            font-size: 16px;
+        }
+        input[type="date"] { color-scheme: dark; }
+        button.add-btn {
+            background-color: var(--accent);
+            color: #000;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .list-container { list-style: none; padding: 0; margin: 0; }
+        .list-item {
+            background-color: var(--card-bg);
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .empty-msg { color: #666; font-size: 13px; }
+
+        .item-info { display: flex; flex-direction: column; }
+        .item-cat { font-size: 11px; color: #aaa; text-transform: uppercase; }
+        .item-val { font-weight: bold; }
+
+        .delete-btn {
+            background: none; border: 1px solid #444; color: var(--danger);
+            border-radius: 50%; width: 30px; height: 30px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .status-green { border-left: 5px solid var(--green); }
+        .status-red { border-left: 5px solid var(--red); }
+
+        .backup-section {
+            margin-top: 10px;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-top: 1px solid #333;
+        }
+        .btn-secondary {
+            padding: 12px;
+            background: #2c2c2c;
+            color: #aaa;
+            border: 1px solid #444;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('geral')">Geral</button>
+        <button class="tab-btn" onclick="switchTab('historico')">Histórico</button>
+    </div>
+
+    <div id="geral" class="tab-content active">
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>Orçamento (V1)</h3>
+                <div class="money v1" id="displayV1">R$ 0,00</div>
+            </div>
+            <div class="card">
+                <h3>Gasto Hoje (V2)</h3>
+                <div class="money v2" id="displayV2">R$ 0,00</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Registrar Compra</h3>
+            <div class="input-group">
+                <span class="input-label">Data do gasto</span>
+                <input type="date" id="dataInput">
+                <input type="number" id="valorInput" placeholder="Valor (ex: 25.50)" step="0.01">
+                <select id="categoriaInput" onchange="toggleCategoriaOutro()">
+                    <option value="" disabled selected>Selecione a Categoria</option>
+                    <option value="BH">BH</option>
+                    <option value="Marmitex">Marmitex</option>
+                    <option value="Farmacia">Farmácia</option>
+                    <option value="Padaria/Lanche">Padaria/Lanche</option>
+                    <option value="Reparo">Reparo</option>
+                    <option value="Outro">Outro</option>
+                </select>
+                <input type="text" id="outroInput" placeholder="Especifique o motivo (obrigatório)" style="display:none;">
+                <button class="add-btn" onclick="registrarCompra()">Confirmar Gasto</button>
+            </div>
+        </div>
+
+        <div>
+            <h4 style="color:#666; font-size: 11px; margin-bottom: 10px;">GASTOS DE HOJE</h4>
+            <ul id="listaHoje" class="list-container"></ul>
+        </div>
+    </div>
+
+    <div id="historico" class="tab-content">
+        <h4 style="color:#666; font-size: 11px; margin-bottom: 10px;">DIAS ANTERIORES</h4>
+        <ul id="listaHistorico" class="list-container"></ul>
+
+        <div class="backup-section">
+            <h4 style="color:#666; font-size: 11px; text-align: center;">RELATÓRIOS</h4>
+            <button class="add-btn" onclick="gerarRelatorioPDF()">Gerar Relatório Completo (PDF)</button>
+            <button class="btn-secondary" style="color: var(--accent); border-color: var(--accent);" onclick="novoPeriodo()">Iniciar Novo Período (zerar lançamentos)</button>
+        </div>
+
+        <div class="backup-section">
+            <h4 style="color:#666; font-size: 11px; text-align: center;">SEGURANÇA DE DADOS</h4>
+            <button class="btn-secondary" onclick="exportarDados()">Baixar Arquivo de Backup</button>
+            <button class="btn-secondary" onclick="importarDados()">Restaurar do Backup</button>
+            <button class="btn-secondary" style="color: #ff4444; border-color: #ff4444;" onclick="resetarApp()">Resetar Tudo (voltar ao orçamento padrão)</button>
+        </div>
+    </div>
+
+    <script>
+        const VALOR_SALARIO = 2600.00;
+        const LIMITE_DIARIO_HISTORICO = 110.00;
+        const DIA_PAGAMENTO = 27;
+        const LIMITE_VALOR_INSERCAO = 500.00;
+        const STORAGE_KEY = 'financasApp_v4';
+
+        const dataInicial = new Date();
+        const mesInicial = (dataInicial.getDate() >= DIA_PAGAMENTO) ? dataInicial.getMonth() : -1;
+
+        // Estado: cada gasto guarda sua própria data (dataISO), então lançamentos
+        // retroativos são só registros com uma data no passado. "Hoje" e o
+        // "histórico" são sempre calculados a partir dessa lista, nunca guardados
+        // separadamente — isso evita duplicidade/perda ao lançar dias atrasados.
+        let state = {
+            v1: VALOR_SALARIO,
+            transacoes: [], // { id, dataISO: 'AAAA-MM-DD', valor, categoria }
+            ultimoMesRecarga: mesInicial
+        };
+
+        function todayISO() {
+            const d = new Date();
+            const off = d.getTimezoneOffset();
+            return new Date(d.getTime() - off * 60000).toISOString().split('T')[0];
+        }
+
+        function formatarMoeda(v) {
+            return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function formatarDataBR(iso) {
+            const [ano, mes, dia] = iso.split('-');
+            return `${dia}/${mes}/${ano}`;
+        }
+
+        function init() {
+            carregarDados();
+            verificarSalarioMensal();
+            const dIn = document.getElementById('dataInput');
+            dIn.value = todayISO();
+            dIn.max = todayISO();
+            atualizarInterface();
+        }
+
+        function carregarDados() {
+            const dadosSalvos = localStorage.getItem(STORAGE_KEY);
+            if (dadosSalvos) state = JSON.parse(dadosSalvos);
+        }
+
+        function salvarDados() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            atualizarInterface();
+        }
+
+        function verificarSalarioMensal() {
+            const hoje = new Date();
+            if (hoje.getDate() >= DIA_PAGAMENTO && state.ultimoMesRecarga !== hoje.getMonth()) {
+                state.v1 += VALOR_SALARIO;
+                state.ultimoMesRecarga = hoje.getMonth();
+                salvarDados();
+                alert("Dia de Pagamento! Saldo atualizado.");
+            }
+        }
+
+        function toggleCategoriaOutro() {
+            const cIn = document.getElementById('categoriaInput');
+            const oIn = document.getElementById('outroInput');
+            oIn.style.display = cIn.value === 'Outro' ? 'block' : 'none';
+            if (cIn.value !== 'Outro') oIn.value = '';
+        }
+
+        function registrarCompra() {
+            const vIn = document.getElementById('valorInput');
+            const cIn = document.getElementById('categoriaInput');
+            const dIn = document.getElementById('dataInput');
+            const oIn = document.getElementById('outroInput');
+            const valor = parseFloat(vIn.value);
+            const dataISO = dIn.value;
+
+            if (isNaN(valor) || valor <= 0) return alert("Valor inválido.");
+            if (valor >= LIMITE_VALOR_INSERCAO) return alert(`Erro: Valor acima de ${formatarMoeda(LIMITE_VALOR_INSERCAO)}. Por segurança, insira valores menores.`);
+            if (!cIn.value) return alert("Selecione a categoria.");
+            if (cIn.value === 'Outro' && !oIn.value.trim()) return alert("Descreva o motivo do gasto em 'Outro'.");
+            if (!dataISO) return alert("Selecione a data do gasto.");
+            if (dataISO > todayISO()) return alert("Não é possível lançar gastos com data futura.");
+
+            const categoriaFinal = cIn.value === 'Outro' ? `Outro: ${oIn.value.trim()}` : cIn.value;
+
+            state.v1 -= valor;
+            state.transacoes.unshift({ id: Date.now(), dataISO, valor, categoria: categoriaFinal });
+
+            vIn.value = ""; cIn.value = ""; oIn.value = ""; oIn.style.display = 'none';
+            dIn.value = todayISO();
+            salvarDados();
+        }
+
+        function deletarCompra(id) {
+            const item = state.transacoes.find(t => t.id === id);
+            if (item && confirm("Tem certeza que deseja apagar essa compra? O valor retornará ao orçamento.")) {
+                state.v1 += item.valor;
+                state.transacoes = state.transacoes.filter(t => t.id !== id);
+                salvarDados();
+            }
+        }
+
+        function novoPeriodo() {
+            if (state.transacoes.length === 0) return alert("Ainda não há lançamentos para encerrar.");
+            if (confirm("Isso vai apagar todos os lançamentos e começar um novo período de relatório (o saldo atual do orçamento é mantido). Recomendado ao virar o mês fiscal. Continuar?")) {
+                state.transacoes = [];
+                salvarDados();
+                alert("Novo período iniciado. O próximo relatório vai contar a partir do primeiro lançamento deste ciclo.");
+            }
+        }
+
+        function atualizarInterface() {
+            const hojeISO = todayISO();
+            const transacoesHoje = state.transacoes.filter(t => t.dataISO === hojeISO);
+            const v2 = transacoesHoje.reduce((s, t) => s + t.valor, 0);
+
+            document.getElementById('displayV1').innerText = formatarMoeda(state.v1);
+            document.getElementById('displayV2').innerText = formatarMoeda(v2);
+
+            const lH = document.getElementById('listaHoje');
+            lH.innerHTML = transacoesHoje.map(t => `
+                <li class="list-item">
+                    <div class="item-info"><span class="item-cat">${t.categoria}</span><span class="item-val">${formatarMoeda(t.valor)}</span></div>
+                    <button class="delete-btn" onclick="deletarCompra(${t.id})">✕</button>
+                </li>`).join('') || '<p class="empty-msg">Nenhum gasto registrado hoje.</p>';
+
+            const porDia = {};
+            state.transacoes.forEach(t => {
+                if (t.dataISO === hojeISO) return;
+                porDia[t.dataISO] = (porDia[t.dataISO] || 0) + t.valor;
+            });
+            const diasOrdenados = Object.keys(porDia).sort((a, b) => b.localeCompare(a));
+
+            const lHi = document.getElementById('listaHistorico');
+            lHi.innerHTML = diasOrdenados.map(dISO => {
+                const valor = porDia[dISO];
+                return `<li class="list-item ${valor > LIMITE_DIARIO_HISTORICO ? 'status-red' : 'status-green'}">
+                    <span style="font-size:14px">${formatarDataBR(dISO)}</span><span class="item-val">${formatarMoeda(valor)}</span>
+                </li>`;
+            }).join('') || '<p class="empty-msg">Nenhum dia anterior registrado.</p>';
+        }
+
+        function exportarDados() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", `financas_backup.json`);
+            dlAnchorElem.click();
+        }
+
+        function importarDados() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.onchange = e => {
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    try {
+                        const content = JSON.parse(ev.target.result);
+                        if (confirm("Isso substituirá os dados atuais. Continuar?")) {
+                            state = content;
+                            salvarDados();
+                            location.reload();
+                        }
+                    } catch (err) { alert("Arquivo inválido."); }
+                }
+                reader.readAsText(e.target.files[0]);
+            }
+            input.click();
+        }
+
+        function resetarApp() {
+            if (confirm("Deseja apagar TUDO (lançamentos e histórico) e reiniciar com o orçamento padrão de R$ 3400?")) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelectorAll('.tab-btn')[tabId === 'geral' ? 0 : 1].classList.add('active');
+        }
+
+        // ---------- RELATÓRIO EM PDF ----------
+
+        function gerarGraficoCanvas(diasArray) {
+            const larguraBarra = 14;
+            const espacamento = 6;
+            const margemEsquerda = 55;
+            const alturaGrafico = 260;
+            const margemBaixo = 45;
+            // Largura mínima evita que, com poucos dias de dados, o canvas fique
+            // estreito e alto demais — proporção que, ao ser escalada para a
+            // largura da página do PDF, ficava mais alta que uma folha inteira
+            // e cortava o gráfico fora da página.
+            const largura = Math.max(600, margemEsquerda + diasArray.length * (larguraBarra + espacamento) + 20);
+            const altura = alturaGrafico + margemBaixo + 20;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = largura;
+            canvas.height = altura;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, largura, altura);
+
+            const maxValor = Math.max(...diasArray.map(d => d.valor), 1);
+
+            ctx.strokeStyle = '#dddddd';
+            ctx.fillStyle = '#666666';
+            ctx.font = '11px Arial';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 4; i++) {
+                const yLinha = 10 + alturaGrafico - (alturaGrafico * i / 4);
+                const val = maxValor * i / 4;
+                ctx.beginPath();
+                ctx.moveTo(margemEsquerda, yLinha);
+                ctx.lineTo(largura - 10, yLinha);
+                ctx.stroke();
+                ctx.fillText('R$' + val.toFixed(0), margemEsquerda - 8, yLinha + 3);
+            }
+
+            ctx.strokeStyle = '#333333';
+            ctx.beginPath();
+            ctx.moveTo(margemEsquerda, 10);
+            ctx.lineTo(margemEsquerda, 10 + alturaGrafico);
+            ctx.lineTo(largura - 10, 10 + alturaGrafico);
+            ctx.stroke();
+
+            const passoLabel = diasArray.length > 25 ? Math.ceil(diasArray.length / 25) : 1;
+            diasArray.forEach((d, i) => {
+                const x = margemEsquerda + i * (larguraBarra + espacamento) + espacamento;
+                const alturaBarra = (d.valor / maxValor) * alturaGrafico;
+                const y = 10 + alturaGrafico - alturaBarra;
+                ctx.fillStyle = d.valor > LIMITE_DIARIO_HISTORICO ? '#cf6679' : '#03dac6';
+                ctx.fillRect(x, y, larguraBarra, alturaBarra);
+
+                if (i % passoLabel === 0) {
+                    ctx.save();
+                    ctx.translate(x + larguraBarra / 2, 10 + alturaGrafico + 12);
+                    ctx.rotate(-Math.PI / 4);
+                    ctx.fillStyle = '#333333';
+                    ctx.font = '9px Arial';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(formatarDataBR(d.dataISO).slice(0, 5), 0, 0);
+                    ctx.restore();
+                }
+            });
+
+            return canvas.toDataURL('image/png');
+        }
+
+        function gerarRelatorioPDF() {
+            if (!window.jspdf) {
+                return alert("Não foi possível carregar o gerador de PDF. Verifique sua conexão com a internet e tente novamente.");
+            }
+            if (state.transacoes.length === 0) {
+                return alert("Nenhum gasto registrado ainda. Adicione ao menos um lançamento antes de gerar o relatório.");
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+            const larguraPagina = doc.internal.pageSize.getWidth();
+            const margem = 15;
+            let y = 20;
+
+            const hojeISO = todayISO();
+            const primeiraData = state.transacoes.map(t => t.dataISO).sort()[0];
+
+            const porDia = {};
+            state.transacoes.forEach(t => { porDia[t.dataISO] = (porDia[t.dataISO] || 0) + t.valor; });
+
+            const dias = [];
+            let cursor = new Date(primeiraData + 'T00:00:00');
+            const fim = new Date(hojeISO + 'T00:00:00');
+            while (cursor <= fim) {
+                const iso = cursor.toISOString().split('T')[0];
+                dias.push({ dataISO: iso, valor: porDia[iso] || 0 });
+                cursor.setDate(cursor.getDate() + 1);
+            }
+
+            const totalGasto = dias.reduce((s, d) => s + d.valor, 0);
+            const diaComMaiorGasto = dias.reduce((max, d) => (d.valor > max.valor ? d : max), dias[0]);
+            const mediaDiaria = totalGasto / dias.length;
+
+            doc.setFontSize(16); doc.setFont(undefined, 'bold');
+            doc.text('Relatório de Controle Financeiro Pessoal', larguraPagina / 2, y, { align: 'center' });
+            y += 8;
+            doc.setFontSize(10); doc.setFont(undefined, 'normal');
+            doc.text(`Período: ${formatarDataBR(primeiraData)} a ${formatarDataBR(hojeISO)}  (${dias.length} dias)`, larguraPagina / 2, y, { align: 'center' });
+            y += 5;
+            doc.text(`Emitido em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, larguraPagina / 2, y, { align: 'center' });
+            y += 12;
+
+            doc.setFontSize(12); doc.setFont(undefined, 'bold');
+            doc.text('Resumo do Período', margem, y); y += 7;
+            doc.setFontSize(10); doc.setFont(undefined, 'normal');
+            doc.text(`Total gasto no período: ${formatarMoeda(totalGasto)}`, margem, y); y += 6;
+            doc.text(`Média diária: ${formatarMoeda(mediaDiaria)}`, margem, y); y += 6;
+            doc.text(`Dia de maior gasto: ${formatarDataBR(diaComMaiorGasto.dataISO)} (${formatarMoeda(diaComMaiorGasto.valor)})`, margem, y); y += 6;
+            doc.text(`Saldo atual do orçamento: ${formatarMoeda(state.v1)}`, margem, y); y += 10;
+
+            doc.setFontSize(12); doc.setFont(undefined, 'bold');
+            doc.text('Gastos Diários', margem, y); y += 5;
+            const chartDataUrl = gerarGraficoCanvas(dias);
+            const imgProps = doc.getImageProperties(chartDataUrl);
+            let larguraImg = larguraPagina - margem * 2;
+            let alturaImg = (imgProps.height * larguraImg) / imgProps.width;
+            const alturaMaxImg = 230; // garante que o gráfico sempre caiba inteiro numa página
+            if (alturaImg > alturaMaxImg) {
+                alturaImg = alturaMaxImg;
+                larguraImg = (imgProps.width * alturaImg) / imgProps.height;
+            }
+            if (y + alturaImg > 270) { doc.addPage(); y = 20; }
+            doc.addImage(chartDataUrl, 'PNG', margem, y, larguraImg, alturaImg);
+
+            doc.addPage(); y = 20;
+            doc.setFontSize(12); doc.setFont(undefined, 'bold');
+            doc.text('Detalhamento Diário', margem, y); y += 8;
+            doc.setFontSize(9); doc.setFont(undefined, 'bold');
+            doc.text('Data', margem, y);
+            doc.text('Valor Gasto', margem + 35, y);
+            doc.text('Categorias', margem + 75, y);
+            y += 2;
+            doc.line(margem, y, larguraPagina - margem, y);
+            y += 5;
+            doc.setFont(undefined, 'normal');
+
+            dias.forEach(d => {
+                if (y > 275) { doc.addPage(); y = 20; }
+                const categoriasDoDia = state.transacoes.filter(t => t.dataISO === d.dataISO).map(t => t.categoria).join(', ');
+                doc.text(formatarDataBR(d.dataISO), margem, y);
+                doc.text(formatarMoeda(d.valor), margem + 35, y);
+                doc.text(categoriasDoDia || '-', margem + 75, y, { maxWidth: larguraPagina - margem - 75 - margem });
+                y += 6;
+            });
+
+            doc.addPage(); y = 35;
+            doc.setFontSize(11); doc.setFont(undefined, 'bold');
+            doc.text('Declaração pessoal (Unterschrift):', margem, y);
+            y += 9;
+            doc.setFontSize(10); doc.setFont(undefined, 'normal');
+            const declaracao = 'Este relatório foi elaborado pessoalmente por mim de maneira automatizada e facilitada por software de controle. As informações e exposições nele contidas são de minha autoria, e declaro, sob minha responsabilidade, a veracidade, exatidão e a integralidade do conteúdo nele apresentado. O relatório, na presente versão, corresponde ao original por mim definitivamente elaborado e concluído, e assinado na data indicada.';
+            const linhasDeclaracao = doc.splitTextToSize(declaracao, larguraPagina - margem * 2);
+            doc.text(linhasDeclaracao, margem, y);
+            y += linhasDeclaracao.length * 5.5 + 25;
+
+            doc.setFontSize(10);
+            doc.text('x. _______________________________________________________________', margem, y);
+            y += 10;
+            doc.setFontSize(9);
+            doc.text('Data: ____ / ____ / ________', margem, y);
+
+            doc.save(`relatorio_financeiro_${hojeISO}.pdf`);
+        }
+
+        init();
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+    </script>
+</body>
+</html>
